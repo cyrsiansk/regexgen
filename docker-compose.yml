@@ -1,0 +1,16 @@
+version: '3.9'
+
+services:
+  regex-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: regex-generator
+    volumes:
+      - ./app/static:/app/static:ro
+      - ./app/assets/prompt.txt:/app/assets/prompt.txt:ro
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped

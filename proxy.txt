@@ -1,0 +1,5 @@
+# Specify proxies in the format: protocol://user:password@ip:port
+# Examples:
+#   http://user123:pass456@192.168.1.100:8080
+#   socks5://login:secret@10.0.0.1:1080
+# If the file is empty, a direct connection will be used.

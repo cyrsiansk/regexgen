@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Генератор регулярных выражений</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .spinner {
+          border: 4px solid #e5e7eb;
+          border-top: 4px solid #3b82f6;
+          border-radius: 50%;
+          width: 24px;
+          height: 24px;
+          animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+
+        .match {
+          background-color: #dbeafe;
+          padding: 0 2px;
+          border-radius: 2px;
+        }
+
+        .group {
+          background-color: #a5f3fc;
+          padding: 0 2px;
+          border-radius: 2px;
+        }
+    </style>
+</head>
+<body class="bg-blue-100 min-h-screen flex items-center justify-center p-4">
+
+<div class="flex flex-col md:flex-row gap-4 max-w-5xl w-full">
+    <div class="bg-white rounded-lg shadow-md p-6 w-full md:w-1/2">
+        <div class="flex items-center mb-4">
+            <div class="w-6 h-6 mr-2">
+                <svg width="24" height="24" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="4" y="4" width="32" height="32" rx="8" fill="#F0F0F0" stroke="#1A1A1A" stroke-width="2"/>
+                    <rect x="12" y="16" width="16" height="12" rx="4" fill="#1A1A1A"/>
+                    <circle cx="16" cy="22" r="2" fill="#F0F0F0"/>
+                    <circle cx="24" cy="22" r="2" fill="#F0F0F0"/>
+                    <rect x="18" y="12" width="4" height="4" fill="#1A1A1A"/>
+                    <line x1="8" y1="22" x2="12" y2="22" stroke="#1A1A1A" stroke-width="2"/>
+                    <line x1="28" y1="22" x2="32" y2="22" stroke="#1A1A1A" stroke-width="2"/>
+                </svg>
+            </div>
+            <h2 class="text-lg font-bold">Генератор регулярных выражений</h2>
+        </div>
+        <form id="regexForm">
+            <label for="problemInput" class="block text-sm font-medium mb-2">Введите проблему:</label>
+            <input id="problemInput" type="text" placeholder="например, найти адреса почты"
+                   class="w-full p-2 border border-gray-300 rounded-md mb-4"/>
+            <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded-md flex items-center gap-2">
+                Отправить
+                <div id="spinner" class="spinner hidden"></div>
+            </button>
+        </form>
+        <label for="output" class="block text-sm font-medium mb-2 mt-4">Ответ</label>
+        <textarea id="output" readonly class="w-full p-2 border border-gray-300 rounded-md h-40"></textarea>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-md p-6 w-full md:w-1/2">
+        <label for="regexInput" class="block text-sm font-medium mb-2">Регулярное выражение</label>
+        <textarea id="regexInput" class="w-full p-2 border border-gray-300 rounded-md h-20 mb-4">
+\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b
+      </textarea>
+
+        <label for="testText" class="block text-sm font-medium mb-2">Текст для теста</label>
+        <div id="testText" contenteditable="true"
+             class="w-full p-2 border border-gray-300 rounded-md h-40 overflow-auto whitespace-pre-wrap bg-gray-50 mb-2"></div>
+
+        <div id="statusTestText" class="text-sm mt-2 text-gray-700"></div>
+    </div>
+</div>
+
+<script>
+    const form = document.getElementById('regexForm');
+    const input = document.getElementById('problemInput');
+    const output = document.getElementById('output');
+    const spinner = document.getElementById('spinner');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const problem = input.value.trim();
+      if (!problem) return;
+
+      output.value = 'Генерация...';
+      spinner.classList.remove('hidden');
+
+      try {
+        const res = await fetch('/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ problem })
+        });
+        const data = await res.json();
+        output.value = data.regex || 'Нет ответа';
+      } catch (err) {
+        output.value = 'Ошибка при запросе к серверу';
+      } finally {
+        spinner.classList.add('hidden');
+      }
+    });
+
+    function escapeHtml(text) {
+      return text.replace(/[&<>"']/g, m => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]
+      ));
+    }
+
+    function testRegex() {
+      const regexInput = document.getElementById('regexInput').value;
+      const testTextDiv = document.getElementById('testText');
+      const rawText = testTextDiv.textContent;
+      const statusTestText = document.getElementById('statusTestText');
+
+      statusTestText.innerHTML = '';
+
+      let regex;
+      try {
+        regex = new RegExp(regexInput, 'g');
+      } catch (e) {
+        statusTestText.innerHTML = `<span style="color:red;">Ошибка в выражении: ${escapeHtml(e.message)}</span>`;
+        regex = ".*";
+      }
+
+      const matches = [...rawText.matchAll(regex)];
+      if (matches.length === 0) {
+        statusTestText.innerText = 'Совпадений не найдено.';
+        return;
+      }
+
+      const groupColors = [
+        '#fca5a5', '#fdba74', '#fde68a',
+        '#86efac', '#67e8f9', '#a5b4fc',
+        '#c4b5fd', '#f9a8d4', '#fcd34d'
+      ];
+
+      let html = '';
+      let lastIndex = 0;
+
+      for (const match of matches) {
+        const matchStart = match.index;
+        const matchEnd = match.index + match[0].length;
+
+        html += escapeHtml(rawText.slice(lastIndex, matchStart));
+
+        let innerHtml = escapeHtml(match[0]);
+
+        if (match.length > 1) {
+          const offsets = [];
+          let relativeOffset = 0;
+
+          for (let i = 1; i < match.length; i++) {
+            const group = match[i];
+            if (!group) continue;
+
+            const searchStart = match[0].indexOf(group, relativeOffset);
+            if (searchStart !== -1) {
+              offsets.push({
+                start: searchStart,
+                end: searchStart + group.length,
+                color: groupColors[(i - 1) % groupColors.length]
+              });
+              relativeOffset = searchStart + group.length;
+            }
+          }
+
+          offsets.sort((a, b) => b.start - a.start);
+
+          for (const { start, end, color } of offsets) {
+            const before = innerHtml.slice(0, start);
+            const groupContent = innerHtml.slice(start, end);
+            const after = innerHtml.slice(end);
+            innerHtml = `${before}<span style="background-color:${color};border-radius:3px;padding:0 2px;">${groupContent}</span>${after}`;
+          }
+        }
+
+        html += `<span class="match" style="outline:1px solid #333;padding:1px;">${innerHtml}</span>`;
+        lastIndex = matchEnd;
+      }
+
+      html += escapeHtml(rawText.slice(lastIndex));
+
+      testTextDiv.innerHTML = html;
+    }
+
+    document.getElementById('regexInput').addEventListener('input', testRegex);
+    document.getElementById('testText').addEventListener('input', testRegex);
+    document.getElementById('testText').addEventListener('blur', testRegex);
+</script>
+</body>
+</html>
